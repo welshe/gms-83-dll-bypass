@@ -124,7 +124,7 @@ INT __fastcall CClientSocket__OnConnect_Hook(CClientSocket *pThis, PVOID edx, in
     if (consumed_len == 0) { Log("Failed to decode nVersionHeader."); CClientSocket__OnConnect_Hook(pThis, edx, 0); return 0; }
     current_ptr += consumed_len; remaining_len -= consumed_len;
 
-    if (remaining_len < 0) { // Should be caught by DecodeX returning 0 if it tries to read past remaining_len
+    if (remaining_len < 0) {
         Log("Buffer underflow during decoding.");
         CClientSocket__OnConnect_Hook(pThis, edx, 0);
         return 0;
@@ -197,14 +197,14 @@ VOID __fastcall CClientSocket__Connect_Addr_Hook(CClientSocket *pThis, PVOID edx
         return;
     }
 
-    pThis->m_tTimeout = timeGetTime() + 5000; // 5 seconds timeout
+    pThis->m_tTimeout = timeGetTime() + 5000;
     
-    const long eventMask = FD_CONNECT | FD_READ | FD_CLOSE; // Added FD_READ and FD_CLOSE
+    const long eventMask = FD_CONNECT | FD_READ | FD_CLOSE;
     int asyncResult = WSAAsyncSelect(pThis->m_sock._m_hSocket, pThis->m_hWnd, WM_SOCKET_MSG, eventMask);
     if (asyncResult == SOCKET_ERROR) {
         Log("CClientSocket::Connect_Addr_Hook WSAAsyncSelect failed. WSALastError=[%d]", WSAGetLastError());
         pThis->m_sock.CloseSocket();
-        CClientSocket__OnConnect_Hook(pThis, edx, 0); // Report failure
+        CClientSocket__OnConnect_Hook(pThis, edx, 0);
         return;
     }
 
@@ -216,7 +216,7 @@ VOID __fastcall CClientSocket__Connect_Addr_Hook(CClientSocket *pThis, PVOID edx
     if (connectResult == SOCKET_ERROR && lastError != WSAEWOULDBLOCK) {
         Log("CClientSocket::Connect_Addr_Hook connect() failed immediately. WSALastError=[%d]", lastError);
         pThis->m_sock.CloseSocket();
-        CClientSocket__OnConnect_Hook(pThis, edx, 0); // Report failure
+        CClientSocket__OnConnect_Hook(pThis, edx, 0);
     }
     Log("CClientSocket::Connect_Addr_Hook connection attempt pending or succeeded immediately.");
 }
@@ -227,17 +227,15 @@ VOID __fastcall CClientSocket__Connect_Ctx_Hook(CClientSocket *pThis, PVOID edx,
     Log("CClientSocket::Connect(Ctx)");
     pThis->m_ctxConnect.lAddr.RemoveAll();
     pThis->m_ctxConnect.lAddr.AddTail(&ctx->lAddr);
-    pThis->m_ctxConnect.posList = ctx->posList; // This might be problematic if ctx->lAddr is temporary
+    pThis->m_ctxConnect.posList = ctx->posList;
     pThis->m_ctxConnect.bLogin = ctx->bLogin;
     
-    // Ensure posList points within our own copy of lAddr
     if (!pThis->m_ctxConnect.lAddr.IsEmpty()) {
          pThis->m_ctxConnect.posList = reinterpret_cast<__POSITION *>(pThis->m_ctxConnect.lAddr.GetHeadPosition());
-         pThis->m_addr = *pThis->m_ctxConnect.lAddr.GetHeadPosition(); // Dereference POSITIONS
+         pThis->m_addr = *pThis->m_ctxConnect.lAddr.GetHeadPosition();
          CClientSocket__Connect_Addr_Hook(pThis, edx, &pThis->m_addr);
     } else {
         Log("CClientSocket::Connect_Ctx_Hook: No addresses in context.");
-        // Potentially call OnConnect(0) or handle error appropriately
     }
     Log("CClientSocket::Connect_Ctx_Hook finished.");
 }
@@ -255,7 +253,7 @@ INT __fastcall CLogin__SendCheckPasswordPacket_Hook(CLogin *pThis, PVOID edx, ch
 
     CSystemInfo systemInfo;
     systemInfo.Init();
-    COutPacket cOutPacket(1); // Assuming 1 is CHECK_PASSWORD_OPCODE
+    COutPacket cOutPacket(1);
 
     ZXString<char> tempStringID(sID, static_cast<unsigned int>(-1));
     cOutPacket.EncodeStr(tempStringID);
@@ -369,7 +367,7 @@ VOID __fastcall CWvsApp__ConnectLogin_Hook(CWvsApp *pThis, PVOID edx) {
                 } else if (event == FD_CLOSE) {
                      Log("CWvsApp::ConnectLogin_Hook: FD_CLOSE received (error %hu). Calling OnConnect(0).", error);
                      CClientSocket__OnConnect_Hook(pSock, edx, 0);
-                } else if (error != 0 && error != WSAENOTSOCK) { // Other event with an error
+                } else if (error != 0 && error != WSAENOTSOCK) {
                      Log("CWvsApp::ConnectLogin_Hook: WM_SOCKET event %hu with error %hu. Calling OnConnect(0).", event, error);
                      CClientSocket__OnConnect_Hook(pSock, edx, 0);
                 }
@@ -450,7 +448,7 @@ VOID __fastcall CWvsApp__Run_Hook(CWvsApp *pThis, PVOID edx, int *pbTerminate) {
                 }
                  if (*pbTerminate) break;
             }
-        } else { // Timeout or other
+        } else {
             if (CInputSystem::GetInstance()->GenerateAutoKeyDown(&isMsg)) {
                 pThis->ISMsgProc(isMsg.message, isMsg.wParam, isMsg.lParam);
             }
