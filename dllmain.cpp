@@ -43,10 +43,10 @@ INT __fastcall CClientSocket__OnConnect_Hook(CClientSocket *pThis, PVOID edx, in
     pBuff.p = ZSocketBuffer::Alloc(BUFFER_SIZE);
     if (!pBuff.p) {
         Log("ZSocketBuffer::Alloc failed");
-        CClientSocket__OnConnect_Hook(pThis, edx, 0); // Critical error, treat as connection failure
+        CClientSocket__OnConnect_Hook(pThis, edx, 0);
         return 0;
     }
-    if (pBuff.p->m_nRef) { // This logic is specific to ZSocketBuffer's ref counting
+    if (pBuff.p->m_nRef) {
         InterlockedIncrement(&pBuff.p->m_nRef);
     }
     char* buffer = pBuff.p->buf;
@@ -58,10 +58,6 @@ INT __fastcall CClientSocket__OnConnect_Hook(CClientSocket *pThis, PVOID edx, in
         bytesReceived = recv(pThis->m_sock._m_hSocket, buffer + total_bytes_in_buffer, BUFFER_SIZE - total_bytes_in_buffer, 0);
         if (bytesReceived > 0) {
             total_bytes_in_buffer += bytesReceived;
-            // For handshake, we typically expect all data quickly.
-            // If we need to ensure a minimum amount or parse incrementally, this loop could be more complex.
-            // For now, assume one or few recv calls get the whole handshake.
-            // This simple model breaks if handshake is larger than BUFFER_SIZE or split across many packets with delays.
             break; 
         }
         if (bytesReceived == 0) {
@@ -78,7 +74,7 @@ INT __fastcall CClientSocket__OnConnect_Hook(CClientSocket *pThis, PVOID edx, in
                 CClientSocket__OnConnect_Hook(pThis, edx, 0);
                 return 0;
             }
-            Sleep(50); // Blocking wait, inherent to this function's synchronous-like design for handshake
+            Sleep(50);
         } else {
             Log("CClientSocket::OnConnect recv error.");
             CClientSocket__OnConnect_Hook(pThis, edx, 0);
@@ -86,7 +82,7 @@ INT __fastcall CClientSocket__OnConnect_Hook(CClientSocket *pThis, PVOID edx, in
         }
     } while (retries_left >= 0);
 
-    if (total_bytes_in_buffer == 0 && retries_left < 0) { // Timed out without receiving anything
+    if (total_bytes_in_buffer == 0 && retries_left < 0) {
          CClientSocket__OnConnect_Hook(pThis, edx, 0);
          return 0;
     }
@@ -133,10 +129,6 @@ INT __fastcall CClientSocket__OnConnect_Hook(CClientSocket *pThis, PVOID edx, in
         CClientSocket__OnConnect_Hook(pThis, edx, 0);
         return 0;
     }
-    // Original code: if (result < accumulatedBuf) { return 0; }
-    // This meant if (current_ptr < buffer + total_bytes_in_buffer), i.e. if (remaining_len > 0)
-    // If trailing data is an error:
-    // if (remaining_len > 0) { Log("Trailing data in handshake packet."); CClientSocket__OnConnect_Hook(pThis, edx, 0); return 0; }
 
 
     Log("CClientSocket::OnConnect nVersionHeader=[%hhu]", nVersionHeader);
@@ -328,8 +320,8 @@ VOID __fastcall CWvsApp__CallUpdate_Hook(CWvsApp *pThis, PVOID edx, int tCurTime
             stage->Update();
         }
         CWndMan::s_Update();
-        pThis->m_tUpdateTime += 30; // 30ms per update tick
-        if (tCurTime - pThis->m_tUpdateTime > 0) { // If still behind
+        pThis->m_tUpdateTime += 30;
+        if (tCurTime - pThis->m_tUpdateTime > 0) {
             IWzGr2D* gr = get_gr();
             if (gr) {
                  HRESULT hr = gr->UpdateCurrentTime(pThis->m_tUpdateTime);
@@ -395,13 +387,12 @@ VOID __fastcall CWvsApp__ConnectLogin_Hook(CWvsApp *pThis, PVOID edx) {
         if (msg.message == WM_QUIT) {
             break;
         }
-        // If OnConnect(1) succeeded, loop breaks. If OnConnect(0) was called and failed to establish connection,
-        // it might try next IP or eventually timeout will hit.
+
         if (pSock->m_sock._m_hSocket == INVALID_SOCKET && !pSock->m_ctxConnect.lAddr.GetCount()) {
              Log("CWvsApp::ConnectLogin_Hook: Socket closed and no more addresses to try.");
              break; 
         }
-        Sleep(1); // Yield CPU
+        Sleep(1);
     }
 
     if (pSock->m_sock._m_hSocket == 0 || pSock->m_sock._m_hSocket == INVALID_SOCKET) {
@@ -447,14 +438,14 @@ VOID __fastcall CWvsApp__Run_Hook(CWvsApp *pThis, PVOID edx, int *pbTerminate) {
                     HRESULT hr = pThis->m_hrComErrorCode;
                     pThis->m_hrComErrorCode = 0;
                     pThis->m_hrZExceptionCode = 0; 
-                    // _com_raise_error(hr, nullptr); // Or equivalent error handling
+                    
                     return; 
                 }
                 if (pThis->m_hrZExceptionCode != 0) {
                     Log("ZException Occurred: 0x%08X. Raising.", pThis->m_hrZExceptionCode);
                      HRESULT hr = pThis->m_hrZExceptionCode;
                     pThis->m_hrZExceptionCode = 0;
-                    // _com_raise_error(hr, nullptr); // Or equivalent error handling
+                    
                     return;
                 }
                  if (*pbTerminate) break;
@@ -479,7 +470,7 @@ VOID __fastcall CWvsApp__Run_Hook(CWvsApp *pThis, PVOID edx, int *pbTerminate) {
         }
     } while (!*pbTerminate);
 
-    if (msg.message == WM_QUIT || *pbTerminate) { // Ensure PostQuitMessage if not already done by WM_QUIT
+    if (msg.message == WM_QUIT || *pbTerminate) {
         PostQuitMessage(static_cast<int>(msg.wParam));
     }
 }
@@ -585,7 +576,7 @@ typedef VOID(__stdcall *_CWvsApp__CWvsApp_t)(CWvsApp *pThis, const char *sCmdLin
 VOID __fastcall CWvsApp__CWvsApp_Hook(CWvsApp *pThis, PVOID edxUnused, const char *sCmdLine) {
     Log("CWvsApp::CWvsApp");
     void **instance = reinterpret_cast<void **>(C_WVS_APP_INSTANCE);
-    *instance = pThis; // Assuming pThis is always valid here
+    *instance = pThis;
 
     pThis->m_hWnd = nullptr;
     pThis->m_bPCOMInitialized = 0;
@@ -613,25 +604,25 @@ VOID __fastcall CWvsApp__CWvsApp_Hook(CWvsApp *pThis, PVOID edxUnused, const cha
 
 #if defined(REGION_JMS)
     pThis->unk2[0] = ZXString<char>("", static_cast<unsigned int>(-1));
-    pThis->unk2[1] = ZXString<char>("", static_cast<unsigned int>(-1)); // Corrected second assignment
+    pThis->unk2[1] = ZXString<char>("", static_cast<unsigned int>(-1));
 #endif
     pThis->m_sCmdLine = ZXString<char>(sCmdLine, static_cast<unsigned int>(-1));
     pThis->m_sCmdLine = *pThis->m_sCmdLine.TrimRight("\" ")->TrimLeft("\" ");
 #if (defined(REGION_GMS) && BUILD_MAJOR_VERSION >= 87)
     pThis->m_pBackupBuffer.Alloc(0x1000);
 #endif
-    ZXString<char> sToken; // Default constructor
+    ZXString<char> sToken;
     pThis->GetCmdLine(&sToken, 0);
 
     pThis->m_nGameStartMode = 2;
     pThis->m_dwMainThreadId = GetCurrentThreadId();
 
-    OSVERSIONINFOA ovi; // Use OSVERSIONINFOA for GetVersionExA
+    OSVERSIONINFOA ovi;
     ZeroMemory(&ovi, sizeof(OSVERSIONINFOA));
     ovi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOA);
     GetVersionExA(&ovi);
-    pThis->m_bWin9x = (ovi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS); // VER_PLATFORM_WIN32_WINDOWS is 1
-    if (ovi.dwMajorVersion >= 6 && !pThis->m_nGameStartMode) { // Vista+
+    pThis->m_bWin9x = (ovi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS);
+    if (ovi.dwMajorVersion >= 6 && !pThis->m_nGameStartMode) {
         pThis->m_nGameStartMode = 2;
     }
 
@@ -644,8 +635,8 @@ VOID __fastcall CWvsApp__CWvsApp_Hook(CWvsApp *pThis, PVOID edxUnused, const cha
     if (fnIsWow64Process) {
         fnIsWow64Process(GetCurrentProcess(), &bIsWow64);
     }
-    if (bIsWow64) *g_dwTargetOS = 1996; // Treat WoW64 as older target?
-    if (ovi.dwMajorVersion >= 6 && !bIsWow64) ResetLSP(); // Vista+ 32-bit
+    if (bIsWow64) *g_dwTargetOS = 1996;
+    if (ovi.dwMajorVersion >= 6 && !bIsWow64) ResetLSP();
 #endif
 }
 
@@ -663,7 +654,7 @@ DWORD WINAPI MainProc(LPVOID lpParam) {
     INITMAPLEHOOK(_CWvsApp__Run, _CWvsApp__Run_t, CWvsApp__Run_Hook, C_WVS_APP_RUN);
 
 #if defined(REGION_JMS)
-    static const BYTE patch_B3B96B[] = {0xC3}; // RETN
+    static const BYTE patch_B3B96B[] = {0xC3};
     MemEdit::WriteBytes(0x00B3B96B, (LPVOID)patch_B3B96B, sizeof(patch_B3B96B));
 #endif
 #if (defined(REGION_GMS) && MAJOR_VERSION >= 87) || defined(REGION_JMS)
@@ -671,7 +662,7 @@ DWORD WINAPI MainProc(LPVOID lpParam) {
     INITMAPLEHOOK(_DR__check, _DR__check_t, DR__check_Hook, DR_CHECK);
 #endif
 #if defined(REGION_JMS)
-    static const BYTE patch_B3B610[] = {0x90, 0x90}; // NOP, NOP
+    static const BYTE patch_B3B610[] = {0x90, 0x90};
     MemEdit::WriteBytes(0x00B3B5F7 + 0x19, (LPVOID)patch_B3B610, sizeof(patch_B3B610));
 #endif
 
@@ -702,7 +693,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
         HANDLE hThread = CreateThread(nullptr, 0, MainProc, nullptr, 0, nullptr);
-        if (hThread) CloseHandle(hThread); // Close handle if not needed for synchronization
+        if (hThread) CloseHandle(hThread); 
     }
     return TRUE;
 }
